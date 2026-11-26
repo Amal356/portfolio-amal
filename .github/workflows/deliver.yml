@@ -1,0 +1,85 @@
+# Pipeline de livraison, déclenché depuis Backstage (github:actions:dispatch)
+# Chaîne : récupération du code -> build -> image -> Docker Hub -> déploiement local -> health check
+name: Deliver portfolio
+run-name: Livraison ${{ inputs.version }} (déclenchée par ${{ github.actor }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version de l'image (v1, v2, v1.1…)"
+        required: true
+        default: v1
+
+concurrency:
+  group: deliver-portfolio
+  cancel-in-progress: false
+
+env:
+  IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ vars.IMAGE_NAME }}
+  APP_VERSION: ${{ inputs.version }}
+
+jobs:
+  build-push:
+    name: Build & Push Docker Hub
+    runs-on: [self-hosted, portfolio]
+    steps:
+      - name: Vérifier la convention de version
+        run: |
+          echo "$APP_VERSION" | grep -Eq '^v[0-9]+(\.[0-9]+)*$' \
+            || { echo "::error::Version invalide : $APP_VERSION (attendu v1, v2, v1.1…)"; exit 1; }
+
+      - name: Récupérer le code
+        uses: actions/checkout@v5
+
+      - name: Construire l'image
+        run: |
+          docker build \
+            --build-arg APP_VERSION="$APP_VERSION" \
+            -t "$IMAGE:$APP_VERSION" -t "$IMAGE:latest" .
+
+      - name: S'authentifier sur Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publier l'image
+        run: |
+          docker push "$IMAGE:$APP_VERSION"
+          docker push "$IMAGE:latest"
+
+  deploy:
+    name: Déploiement local & health check
+    needs: build-push
+    runs-on: [self-hosted, portfolio]
+    steps:
+      - name: Récupérer le code (docker-compose.yml)
+        uses: actions/checkout@v5
+
+      - name: Déployer avec docker compose
+        run: |
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker compose ps
+
+      - name: Vérifier la santé du service
+        run: |
+          for i in $(seq 1 30); do
+            BODY=$(curl -fsS http://localhost:3000/api/health || true)
+            if echo "$BODY" | grep -q "\"version\":\"$APP_VERSION\""; then
+              echo "Service OK : $BODY"; exit 0
+            fi
+            echo "Tentative $i/30 : pas encore prêt"; sleep 3
+          done
+          docker compose logs --tail 50
+          echo "::error::Health check échoué"; exit 1
+
+      - name: Résumé
+        run: |
+          {
+            echo "## ✅ Portfolio $APP_VERSION déployé"
+            echo "- Image : \`$IMAGE:$APP_VERSION\`"
+            echo "- URL : http://localhost:3000"
+            echo "- Santé : http://localhost:3000/api/health"
+          } >> "$GITHUB_STEP_SUMMARY"

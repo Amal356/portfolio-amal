@@ -1,0 +1,16 @@
+name: portfolio
+
+services:
+  portfolio:
+    # L'image vient de Docker Hub ; la version est passée par le pipeline (APP_VERSION=v1, v2…)
+    image: amal878/portfolio-nextjs:${APP_VERSION:-v1}
+    container_name: portfolio-nextjs
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

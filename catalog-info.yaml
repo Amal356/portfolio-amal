@@ -1,0 +1,21 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: portfolio-amal
+  title: Portfolio de Amal Jemli
+  description: Portfolio Next.js conteneurisé, livré via Backstage, GitHub Actions et Docker Hub.
+  annotations:
+    github.com/project-slug: Amal356/portfolio-amal
+    backstage.io/source-location: url:https://github.com/Amal356/portfolio-amal/
+  tags: [nextjs, docker, portfolio]
+  links:
+    - url: http://localhost:3000
+      title: Application (déploiement local)
+      icon: web
+    - url: https://hub.docker.com/r/amal878/portfolio-nextjs/tags
+      title: Image Docker Hub
+      icon: dashboard
+spec:
+  type: website
+  lifecycle: experimental
+  owner: group:default/guests
