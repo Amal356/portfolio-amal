@@ -22,7 +22,7 @@ env:
 jobs:
   build-push:
     name: Build & Push Docker Hub
-    runs-on: [self-hosted, portfolio]
+    runs-on: ubuntu-latest
     steps:
       - name: Vérifier la convention de version
         run: |
